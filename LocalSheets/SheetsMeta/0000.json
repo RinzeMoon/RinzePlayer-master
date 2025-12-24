@@ -1,0 +1,61 @@
+{
+    "coverPath": "../images/MusicCover/长征.png",
+    "desc": "一个用来收藏喜欢的音乐的歌单",
+    "id": "0000",
+    "playCount": 1580,
+    "songCount": 5,
+    "songs": [
+        {
+            "album": "原乡",
+            "coverUrl": "../images/MusicCover/长征.png",
+            "duration": "111",
+            "genre": "摇滚",
+            "id": "song_001",
+            "name": "长征",
+            "path": "../music/1.mp3",
+            "singer": "罗大佑"
+        },
+        {
+            "album": "之乎者也",
+            "coverUrl": "",
+            "duration": "222",
+            "genre": "民谣",
+            "id": "song_002",
+            "name": "童年",
+            "path": "../music/童年.mp3",
+            "singer": "罗大佑"
+        },
+        {
+            "album": "首都",
+            "coverUrl": "",
+            "duration": "333",
+            "genre": "摇滚",
+            "id": "song_003",
+            "name": "飛車",
+            "path": "../music/飛車.mp3",
+            "singer": "罗大佑"
+        },
+        {
+            "album": "甜蜜蜜",
+            "coverUrl": "",
+            "duration": "123",
+            "genre": "流行",
+            "id": "song_004",
+            "name": "甜蜜蜜",
+            "path": "../music/甜蜜蜜.mp3",
+            "singer": "邓丽君"
+        },
+        {
+            "album": "岛国之情歌第四集",
+            "coverUrl": "",
+            "duration": "124",
+            "genre": "流行",
+            "id": "song_005",
+            "name": "月亮代表我的心",
+            "path": "../music/月亮代表我的心.mp3",
+            "singer": "邓丽君"
+        }
+    ],
+    "tag": "Loved Music",
+    "title": "我喜欢的音乐"
+}

@@ -1,0 +1,21 @@
+{
+    "coverPath": "",
+    "desc": "",
+    "id": "32274b70193b40fb8e73238b101a407a",
+    "playCount": 0,
+    "songCount": 1,
+    "songs": [
+        {
+            "album": "c",
+            "coverUrl": "",
+            "duration": "",
+            "genre": "d",
+            "id": "song_011",
+            "name": "a",
+            "path": "../music/C.wav",
+            "singer": "b"
+        }
+    ],
+    "tag": "新建歌单",
+    "title": "234"
+}

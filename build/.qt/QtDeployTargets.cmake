@@ -1,0 +1,2 @@
+set(__QT_DEPLOY_TARGET_RinzePlayer_FILE /home/lsy/RinzePlayer/build/RinzePlayer)
+set(__QT_DEPLOY_TARGET_RinzePlayer_TYPE EXECUTABLE)

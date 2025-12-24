@@ -1,0 +1,436 @@
+// AudioDecoder.cpp
+#include "../Header/AudioPart/Decode/AudioDecoder.h"
+#include <QDebug>
+#include <QFileInfo>
+#include <cstdlib>
+#include <libavutil/error.h> // 新增：包含av_strerror所需头文件
+
+AudioDecoder::AudioDecoder() {
+    pkt_ = av_packet_alloc();
+
+    if (!pkt_) {
+        qCritical() << "构造函数：av_packet_alloc() 失败，pkt_ 为 NULL！";
+        return; // 直接返回，不初始化后续资源
+    }
+
+    frame_ = av_frame_alloc();
+    resampled_frame_ = av_frame_alloc();
+}
+
+AudioDecoder::~AudioDecoder()
+{
+    close();
+}
+
+void AudioDecoder::close() {
+    std::lock_guard<std::mutex> lock(mtx_); // 仅保护 open 相关资源的释放
+
+    // 1. 释放 open 中初始化的重采样上下文（swr_ctx_）
+    if (swr_ctx_) {
+        swr_free(&swr_ctx_);       // FFmpeg 专用释放，自动置为 NULL
+        swr_ctx_ = nullptr;
+    }
+
+    // 2. 释放 open 中初始化的解码器上下文（codec_ctx_）
+    if (codec_ctx_) {
+        avcodec_free_context(&codec_ctx_); // 释放解码器及内部资源
+        codec_ctx_ = nullptr;
+    }
+
+    // 3. 释放 open 中初始化的封装格式上下文（fmt_ctx_）
+    if (fmt_ctx_) {
+        avformat_close_input(&fmt_ctx_);   // 关闭文件句柄+释放上下文
+        fmt_ctx_ = nullptr;
+    }
+
+    // 4. 重置状态标记（不释放构造资源）
+    is_initialized_ = false;
+    is_eof_ = false;
+    audio_stream_index_ = -1;
+}
+
+bool AudioDecoder::open(const QString& file_path)
+{
+    // std::lock_guard<std::mutex> lock(mtx_);
+    close();
+
+    if (avformat_open_input(&fmt_ctx_, file_path.toUtf8().constData(), nullptr, nullptr) < 0) {
+        qCritical() << "[AudioDecoder] 无法打开文件：" << file_path;
+        return false;
+    }
+
+    if (avformat_find_stream_info(fmt_ctx_, nullptr) < 0) {
+        qCritical() << "[AudioDecoder] 无法获取流信息";
+        close();
+        return false;
+    }
+
+    audio_stream_index_ = av_find_best_stream(fmt_ctx_, AVMEDIA_TYPE_AUDIO, -1, -1, nullptr, 0);
+    if (audio_stream_index_ < 0) {
+        qCritical() << "[AudioDecoder] 未找到音频流";
+        close();
+        return false;
+    }
+    audio_stream_ = fmt_ctx_->streams[audio_stream_index_];
+
+    const AVCodec* codec = avcodec_find_decoder(audio_stream_->codecpar->codec_id);
+    if (!codec) {
+        qCritical() << "[AudioDecoder] 未找到解码器";
+        close();
+        return false;
+    }
+    codec_ctx_ = avcodec_alloc_context3(codec);
+    if (!codec_ctx_) {
+        qCritical() << "[AudioDecoder] 无法分配解码器上下文";
+        close();
+        return false;
+    }
+    if (avcodec_parameters_to_context(codec_ctx_, audio_stream_->codecpar) < 0) {
+        qCritical() << "[AudioDecoder] 无法复制流参数到解码器";
+        close();
+        return false;
+    }
+    if (avcodec_open2(codec_ctx_, codec, nullptr) < 0) {
+        qCritical() << "[AudioDecoder] 无法打开解码器";
+        close();
+        return false;
+    }
+
+    parse_metadata();
+
+    if (!init_resampler()) {
+        qCritical() << "[AudioDecoder] 重采样器初始化失败";
+        close();
+        return false;
+    }
+
+    is_initialized_ = true;
+    qInfo() << "[AudioDecoder] 初始化成功（目标格式：" << av_get_sample_fmt_name(target_sample_fmt_)
+            << "，目标采样率：" << target_sample_rate_
+            << "，目标声道数：" << target_channels_ << "）";
+    return true;
+}
+
+bool AudioDecoder::init_resampler() {
+    if (!need_resample()) {
+        qInfo() << "[重采样] 无需重采样（原始参数与目标一致）";
+        return true;
+    }
+
+    if (swr_ctx_) {
+        swr_free(&swr_ctx_);
+    }
+
+    swr_ctx_ = swr_alloc_set_opts(
+        nullptr,
+        AV_CH_LAYOUT_STEREO,
+        target_sample_fmt_,
+        target_sample_rate_,
+        av_get_default_channel_layout(codec_ctx_->channels),
+        codec_ctx_->sample_fmt,
+        codec_ctx_->sample_rate,
+        0, nullptr
+    );
+    if (!swr_ctx_ || swr_init(swr_ctx_) < 0) {
+        qWarning() << "[重采样] 初始化失败";
+        return false;
+    }
+
+    qInfo() << "[重采样] 初始化成功（原始格式：" << av_get_sample_fmt_name(codec_ctx_->sample_fmt)
+            << "，原始采样率：" << codec_ctx_->sample_rate << "）";
+    return true;
+}
+
+bool AudioDecoder::need_resample() const {
+    if (!codec_ctx_) return false;
+    return (codec_ctx_->sample_fmt != target_sample_fmt_) ||
+           (codec_ctx_->sample_rate != target_sample_rate_) ||
+           (codec_ctx_->channels != target_channels_);
+}
+
+void AudioDecoder::parse_metadata() {
+    meta_.sampleRate = codec_ctx_->sample_rate;
+    meta_.channels = codec_ctx_->channels;
+    meta_.sampleFmt = codec_ctx_->sample_fmt;
+    if (audio_stream_->duration != AV_NOPTS_VALUE) {
+        meta_.durationMs = (int64_t)(av_q2d(audio_stream_->time_base) * audio_stream_->duration * 1000);
+    } else {
+        meta_.durationMs = 0;
+    }
+    qInfo() << "[元信息] 解析完成（时长：" << meta_.durationMs << "ms，声道数：" << meta_.channels << "）";
+}
+
+AVRational AudioDecoder::get_audio_time_base() {
+    if (audio_stream_) {
+        return audio_stream_->time_base;
+    }
+    return {1, 1000};
+}
+
+bool AudioDecoder::decode_frame(AudioFrame& out_frame)
+{
+    // 1. 多线程安全锁
+    std::lock_guard<std::mutex> lock(mtx_);
+
+    // 2. 初始状态检查
+    if (!is_initialized_ || is_eof_) {
+        qWarning() << "[DecodeFrame] 跳过：解码器未初始化（" << is_initialized_ << "）或已到文件尾（" << is_eof_ << "）";
+        return false;
+    }
+
+    // 3. 重置输出帧（避免旧数据干扰）
+    memset(&out_frame, 0, sizeof(AudioFrame));
+    out_frame.data = nullptr;  // 初始化指针为NULL，避免野指针
+
+    // 4. 解码循环
+    while (true) {
+        // -------------------------- 4.1 读取音频数据包 --------------------------
+        int ret = av_read_frame(fmt_ctx_, pkt_);
+        if (ret < 0) {
+            if (ret == AVERROR_EOF) {
+                qInfo() << "[DecodeFrame] 已到文件尾，发送空包刷新解码器剩余帧";
+                ret = avcodec_send_packet(codec_ctx_, nullptr);
+                is_eof_ = true;
+                qInfo() << "[DecodeFrame] 标记解码器为EOF状态";
+                if (ret < 0) {
+                    char err_buf[AV_ERROR_MAX_STRING_SIZE] = {0};
+                    av_strerror(ret, err_buf, sizeof(err_buf));
+                    qWarning() << "[DecodeFrame] 发送空包失败：" << err_buf;
+                    av_packet_unref(pkt_);
+                    return false;
+                }
+            } else {
+                char err_buf[AV_ERROR_MAX_STRING_SIZE] = {0};
+                av_strerror(ret, err_buf, sizeof(err_buf));
+                qWarning() << "[DecodeFrame] 读取数据包失败：" << err_buf;
+                av_packet_unref(pkt_);
+                return false;
+            }
+        } else if (pkt_->stream_index != audio_stream_index_) {
+            qDebug() << "[DecodeFrame] 跳过非音频流（流索引：" << pkt_->stream_index << "）";
+            av_packet_unref(pkt_);
+            continue;
+        }
+
+        // -------------------------- 4.2 发送数据包到解码器 --------------------------
+        ret = avcodec_send_packet(codec_ctx_, pkt_);
+        av_packet_unref(pkt_);
+        if (ret < 0) {
+            char err_buf[AV_ERROR_MAX_STRING_SIZE] = {0};
+            av_strerror(ret, err_buf, sizeof(err_buf));
+            qWarning() << "[DecodeFrame] 发送数据包到解码器失败：" << err_buf;
+            return false;
+        }
+
+        // -------------------------- 4.3 接收解码后的原始帧 --------------------------
+        ret = avcodec_receive_frame(codec_ctx_, frame_);
+        if (ret == AVERROR(EAGAIN)) {
+            qDebug() << "[DecodeFrame] 数据不足（EAGAIN），继续读取数据包";
+            continue;
+        } else if (ret == AVERROR_EOF) {
+            qInfo() << "[DecodeFrame] 解码器已无剩余帧，标记 EOF";
+            is_eof_ = true;
+            return false;
+        } else if (ret < 0) {
+            char err_buf[AV_ERROR_MAX_STRING_SIZE] = {0};
+            av_strerror(ret, err_buf, sizeof(err_buf));
+            qWarning() << "[DecodeFrame] 接收解码帧失败：" << err_buf;
+            return false;
+        }
+
+        // -------------------------- 4.4 重采样处理 --------------------------
+        AVFrame* final_frame = frame_;
+        bool use_resampled = false;
+
+        if (need_resample()) {
+            qInfo() << "[DecodeFrame] 启动重采样（原始格式：" << av_get_sample_fmt_name((AVSampleFormat)frame_->format)
+                    << "，原始采样率：" << frame_->sample_rate
+                    << "，原始样本数：" << frame_->nb_samples << "）";
+
+            // 计算目标样本数
+            int dst_nb_samples = av_rescale_rnd(
+                swr_get_delay(swr_ctx_, frame_->sample_rate) + frame_->nb_samples,
+                target_sample_rate_,
+                frame_->sample_rate,
+                AV_ROUND_UP
+            );
+            if (dst_nb_samples <= 0) {
+                qWarning() << "[DecodeFrame] 重采样目标样本数无效（" << dst_nb_samples << "），跳过该帧";
+                av_frame_unref(frame_);
+                return false;
+            }
+
+            // 初始化重采样帧
+            av_frame_unref(resampled_frame_);
+            resampled_frame_->nb_samples = dst_nb_samples;
+            resampled_frame_->format = target_sample_fmt_;
+            resampled_frame_->channel_layout = AV_CH_LAYOUT_STEREO;
+            resampled_frame_->channels = target_channels_;
+            resampled_frame_->sample_rate = target_sample_rate_;
+
+            // 分配重采样帧缓冲区（FFmpeg自动对齐，满足AVX要求）
+            ret = av_frame_get_buffer(resampled_frame_, 16);  // 显式指定16字节对齐
+            if (ret < 0) {
+                char err_buf[AV_ERROR_MAX_STRING_SIZE] = {0};
+                av_strerror(ret, err_buf, sizeof(err_buf));
+                qWarning() << "[DecodeFrame] 重采样缓冲区分配失败：" << err_buf;
+                av_frame_unref(frame_);
+                return false;
+            }
+            if (!resampled_frame_->data[0]) {
+                qWarning() << "[DecodeFrame] 重采样缓冲区data[0]为空，跳过该帧";
+                av_frame_unref(frame_);
+                av_frame_unref(resampled_frame_);
+                return false;
+            }
+            qInfo() << "[DecodeFrame] 重采样缓冲区分配成功（data[0]：" << (void*)resampled_frame_->data[0]
+                    << "，对齐检查：" << ((uintptr_t)resampled_frame_->data[0] % 16 == 0 ? "16字节对齐" : "未对齐")
+                    << "，缓冲区大小：" << resampled_frame_->linesize[0] << "字节）";
+
+            // 执行重采样
+            int converted_samples = swr_convert(
+                swr_ctx_,
+                resampled_frame_->data,
+                dst_nb_samples,
+                (const uint8_t**)frame_->data,
+                frame_->nb_samples
+            );
+            if (converted_samples <= 0) {
+                char err_buf[AV_ERROR_MAX_STRING_SIZE] = {0};
+                av_strerror(converted_samples < 0 ? converted_samples : AVERROR_UNKNOWN, err_buf, sizeof(err_buf));
+                qWarning() << "[DecodeFrame] 重采样执行失败（有效样本数：" << converted_samples << "）：" << err_buf;
+                av_frame_unref(frame_);
+                av_frame_unref(resampled_frame_);
+                return false;
+            }
+            resampled_frame_->nb_samples = converted_samples;  // 同步实际样本数
+            qInfo() << "[DecodeFrame] 重采样成功（转换后样本数：" << converted_samples << "）";
+
+            final_frame = resampled_frame_;
+            use_resampled = true;
+        }
+
+        // -------------------------- 4.5 最终帧验证 --------------------------
+        if (!final_frame->data[0] || final_frame->nb_samples <= 0 || final_frame->channels <= 0) {
+            qWarning() << "[DecodeFrame] 最终帧无效（data[0]：" << (void*)final_frame->data[0]
+                    << "，样本数：" << final_frame->nb_samples << "，声道数：" << final_frame->channels << "）";
+            av_frame_unref(frame_);
+            if (use_resampled) av_frame_unref(resampled_frame_);
+            return false;
+        }
+        qInfo() << "[DecodeFrame] 最终帧验证通过（格式：" << av_get_sample_fmt_name((AVSampleFormat)final_frame->format)
+                << "，声道数：" << final_frame->channels
+                << "，样本数：" << final_frame->nb_samples
+                << "，数据指针：" << (void*)final_frame->data[0] << "）";
+
+        // -------------------------- 4.6 填充自定义AudioFrame（核心修复） --------------------------
+        // 1. 初始化基础参数
+        out_frame.channels = final_frame->channels;
+        out_frame.sample_rate = final_frame->sample_rate;
+        out_frame.nb_samples = final_frame->nb_samples;
+        out_frame.sample_fmt = (AVSampleFormat)final_frame->format;
+        out_frame.pts = final_frame->pts;
+
+        // 2. 计算缓冲区大小
+        int bytes_per_sample = av_get_bytes_per_sample(out_frame.sample_fmt);
+        size_t channel_data_size = (size_t)out_frame.nb_samples * bytes_per_sample;  // 单声道大小
+        size_t total_data_size = channel_data_size * out_frame.channels;             // 总大小（交错格式）
+        qInfo() << "[DecodeFrame] 计算缓冲区：单声道=" << channel_data_size << "字节，总大小=" << total_data_size
+                << "字节（样本数=" << out_frame.nb_samples << "，字节/样本=" << bytes_per_sample << "）";
+
+        // 3. 分配指针数组
+        out_frame.data = new (std::nothrow) uint8_t*[out_frame.channels];
+        if (!out_frame.data) {
+            qCritical() << "[DecodeFrame] 指针数组分配失败（内存不足）";
+            av_frame_unref(frame_);
+            if (use_resampled) av_frame_unref(resampled_frame_);
+            return false;
+        }
+
+        // 4. 分配对齐的数据流缓冲区（16字节对齐，满足AVX要求）
+        const int align = 16;  // AVX指令最小对齐要求
+        if (out_frame.sample_fmt == AV_SAMPLE_FMT_S16) {  // 交错格式（S16）
+            uint8_t* buffer = nullptr;
+            ret = posix_memalign((void**)&buffer, align, total_data_size);  // 对齐分配
+            if (ret != 0 || !buffer) {
+                qCritical() << "[DecodeFrame] 交错缓冲区分配失败（错误码：" << ret << "）";
+                delete[] out_frame.data;
+                out_frame.data = nullptr;
+                av_frame_unref(frame_);
+                if (use_resampled) av_frame_unref(resampled_frame_);
+                return false;
+            }
+            out_frame.data[0] = buffer;
+            out_frame.data[1] = nullptr;  // 交错格式无需右声道独立缓冲区
+
+            // 验证对齐并复制数据
+            qInfo() << "[DecodeFrame] 交错缓冲区：地址=" << (void*)buffer
+                    << "，对齐检查：" << ((uintptr_t)buffer % align == 0 ? "通过" : "失败")
+                    << "，大小=" << total_data_size << "字节";
+            memcpy(out_frame.data[0], final_frame->data[0], total_data_size);  // 复制所有声道数据
+
+        } else if (out_frame.sample_fmt == AV_SAMPLE_FMT_S16P) {  // 平面格式（S16P）
+            for (int i = 0; i < out_frame.channels; i++) {
+                uint8_t* buffer = nullptr;
+                ret = posix_memalign((void**)&buffer, align, channel_data_size);
+                if (ret != 0 || !buffer) {
+                    qCritical() << "[DecodeFrame] 平面缓冲区分配失败（声道" << i << "，错误码：" << ret << "）";
+                    // 释放已分配的声道缓冲区
+                    for (int j = 0; j < i; j++) {
+                        free(out_frame.data[j]);
+                    }
+                    delete[] out_frame.data;
+                    out_frame.data = nullptr;
+                    av_frame_unref(frame_);
+                    if (use_resampled) av_frame_unref(resampled_frame_);
+                    return false;
+                }
+                out_frame.data[i] = buffer;
+                memcpy(out_frame.data[i], final_frame->data[i], channel_data_size);  // 复制单声道数据
+                qInfo() << "[DecodeFrame] 平面缓冲区（声道" << i << "）：地址=" << (void*)buffer
+                        << "，对齐检查：" << ((uintptr_t)buffer % align == 0 ? "通过" : "失败")
+                        << "，大小=" << channel_data_size << "字节";
+            }
+        } else {
+            qCritical() << "[DecodeFrame] 不支持的音频格式：" << av_get_sample_fmt_name(out_frame.sample_fmt);
+            delete[] out_frame.data;
+            out_frame.data = nullptr;
+            av_frame_unref(frame_);
+            if (use_resampled) av_frame_unref(resampled_frame_);
+            return false;
+        }
+
+        // 5. 计算linesize（数据流行大小）
+        out_frame.linesize = (out_frame.sample_fmt == AV_SAMPLE_FMT_S16) ? total_data_size : channel_data_size;
+        qInfo() << "[DecodeFrame] 填充完成：linesize=" << out_frame.linesize << "，data[0]=" << (void*)out_frame.data[0];
+
+        // -------------------------- 4.7 释放临时资源 --------------------------
+        av_frame_unref(frame_);
+        if (use_resampled) {
+            av_frame_unref(resampled_frame_);
+        }
+
+        // 4.8 解码成功
+        qInfo() << "[DecodeFrame] 解码完成，成功输出一帧";
+        return true;
+    }
+}
+
+bool AudioDecoder::seek(int64_t target_ms) {
+    std::lock_guard<std::mutex> lock(mtx_);
+    if (!fmt_ctx_ || !audio_stream_) return false;
+
+    int64_t target_pts = (int64_t)(target_ms / 1000.0 * audio_stream_->time_base.den / audio_stream_->time_base.num);
+    int ret = avformat_seek_file(fmt_ctx_, audio_stream_index_, 0, target_pts, target_pts, 0);
+    if (ret < 0) {
+        // 修复：用av_strerror转换错误码
+        char err_buf[AV_ERROR_MAX_STRING_SIZE] = {0};
+        av_strerror(ret, err_buf, sizeof(err_buf));
+        qWarning() << "[定位] 失败：" << err_buf;
+        return false;
+    }
+    avcodec_flush_buffers(codec_ctx_);
+    is_eof_ = false;
+    qInfo() << "[定位] 成功到" << target_ms << "ms";
+    return true;
+}

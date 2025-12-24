@@ -1,0 +1,65 @@
+{
+    "configurations": [
+        {
+            "name": "Linux",
+            "compileCommands": "${workspaceFolder}/compile_commands.json",
+            "compilerPath": "/usr/bin/g++",
+            "cStandard": "c17",
+            "cppStandard": "c++17",
+            "intelliSenseMode": "linux-gcc-x64",
+            "includePath": [
+                "${workspaceFolder}",
+                "${workspaceFolder}/Header",
+                "${workspaceFolder}/Global",
+                "${workspaceFolder}/src",
+                "${workspaceFolder}/build/RinzePlayer_autogen/include",
+                "/home/lsy/Qt/6.9.2/gcc_64/include",
+                "/home/lsy/Qt/6.9.2/gcc_64/include/QtCore",
+                "/home/lsy/Qt/6.9.2/gcc_64/include/QtGui",
+                "/home/lsy/Qt/6.9.2/gcc_64/include/QtWidgets",
+                "/home/lsy/Qt/6.9.2/gcc_64/include/QtMultimedia",
+                "/home/lsy/Qt/6.9.2/gcc_64/include/QtMultimediaWidgets",
+                "/home/lsy/Qt/6.9.2/gcc_64/include/QtNetwork",
+                "/home/lsy/Qt/6.9.2/gcc_64/include/QtOpenGL",
+                "/home/lsy/Qt/6.9.2/gcc_64/mkspecs/linux-g++",
+                "/usr/include",
+                "/usr/local/include",
+                "/usr/include/x86_64-linux-gnu",
+                "/usr/include/SDL2",
+                "/usr/local/include/libavcodec",
+                "/usr/local/include/libavformat",
+                "/usr/local/include/libavutil",
+                "/usr/local/include/libswresample",
+                "/usr/local/include/libswscale"
+            ],
+            "defines": [
+                "__STDC_CONSTANT_MACROS",
+                "__STDC_LIMIT_MACROS",
+                "QT_CORE_LIB",
+                "QT_GUI_LIB",
+                "QT_WIDGETS_LIB",
+                "QT_MULTIMEDIA_LIB",
+                "QT_MULTIMEDIAWIDGETS_LIB",
+                "QT_NETWORK_LIB",
+                "QT_OPENGL_LIB"
+            ],
+            "compilerArgs": [
+                "-Wall",
+                "-Wno-deprecated-declarations"
+            ],
+            "browse": {
+                "path": [
+                    "${workspaceFolder}",
+                    "/usr/include",
+                    "/usr/local/include",
+                    "/usr/include/x86_64-linux-gnu",
+                    "/home/lsy/Qt/6.9.2/gcc_64/include"
+                ],
+                "limitSymbolsToIncludedHeaders": false,
+                "databaseFilename": "${workspaceFolder}/.vscode/browse.vc.db",
+                "enabled": true
+            }
+        }
+    ],
+    "version": 4
+}

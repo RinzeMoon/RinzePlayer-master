@@ -1,0 +1,31 @@
+{
+    "coverPath": "",
+    "desc": "",
+    "id": "a14e9f82db814b579025fe1e7c563d95",
+    "playCount": 0,
+    "songCount": 2,
+    "songs": [
+        {
+            "album": "原乡",
+            "coverUrl": "",
+            "duration": "111",
+            "genre": "民谣",
+            "id": "song_001",
+            "name": "长征",
+            "path": "../music/1.mp3",
+            "singer": "罗大佑"
+        },
+        {
+            "album": "之乎者也",
+            "coverUrl": "",
+            "duration": "222",
+            "genre": "民谣",
+            "id": "song_002",
+            "name": "童年",
+            "path": "../music/童年.mp3",
+            "singer": "罗大佑"
+        }
+    ],
+    "tag": "新建歌单",
+    "title": "123"
+}

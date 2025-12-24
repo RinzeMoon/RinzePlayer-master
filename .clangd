@@ -1,0 +1,47 @@
+CompileFlags:
+  Add:
+    # C++标准
+    - "-std=c++17"
+    
+    # 项目头文件路径
+    - "-I${workspaceFolder}/Header"
+    - "-I${workspaceFolder}/Global"
+    - "-I${workspaceFolder}"
+    
+    # FFmpeg路径（与CMake一致）
+    - "-I/usr/local/include"
+    
+    # Qt路径（根据compile_commands.json中的路径调整）
+    - "-I/home/lsy/Qt/6.9.2/gcc_64/include"
+    - "-I/home/lsy/Qt/6.9.2/gcc_64/include/QtCore"
+    - "-I/home/lsy/Qt/6.9.2/gcc_64/include/QtWidgets"
+    - "-I/home/lsy/Qt/6.9.2/gcc_64/include/QtGui"
+    - "-I/home/lsy/Qt/6.9.2/gcc_64/include/QtMultimedia"
+    - "-I/home/lsy/Qt/6.9.2/gcc_64/include/QtNetwork"
+    - "-I/home/lsy/Qt/6.9.2/gcc_64/include/QtMultimediaWidgets"
+    - "-I/home/lsy/Qt/6.9.2/gcc_64/include/QtOpenGL"
+    
+    # 其他依赖库路径
+    - "-I/usr/include/SDL2"
+    - "-I/usr/include/opus"
+    - "-I/usr/include/fdk-aac"
+    - "-I/usr/include/lame"
+    - "-I/usr/include/vpx"
+    - "-I/usr/include/x264"
+    - "-I/usr/include/x265"
+    
+    # 宏定义
+    - "-D__STDC_CONSTANT_MACROS"
+    - "-D__STDC_LIMIT_MACROS"
+    - "-Wno-deprecated-declarations"
+    
+    # Qt宏定义
+    - "-DQT_CORE_LIB"
+    - "-DQT_GUI_LIB"
+    - "-DQT_WIDGETS_LIB"
+    - "-DQT_MULTIMEDIA_LIB"
+    - "-DQT_MULTIMEDIAWIDGETS_LIB"
+    - "-DQT_OPENGL_LIB"
+    - "-DQT_NETWORK_LIB"
+  
+  Compiler: "g++"

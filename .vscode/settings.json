@@ -1,0 +1,19 @@
+{
+    "clangd.enabled": true,
+    "clangd.arguments": [
+        "--background-index",
+        "--compile-commands-dir=${workspaceFolder}/build",
+        "--completion-style=detailed",
+        "--header-insertion=never",
+        "--all-scopes-completion",
+        "--log=verbose",
+        "--query-driver=/usr/bin/g++"
+    ],
+    "C_Cpp.intelliSenseEngine": "disabled",
+    "C_Cpp.autocomplete": "disabled",
+    "editor.quickSuggestions": {
+        "comments": "on",
+        "strings": "on", 
+        "other": "on"
+    }
+}

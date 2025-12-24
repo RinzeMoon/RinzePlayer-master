@@ -1,0 +1,5 @@
+/home/lsy/RinzePlayer/build/CMakeFiles/RinzePlayer.dir
+/home/lsy/RinzePlayer/build/CMakeFiles/edit_cache.dir
+/home/lsy/RinzePlayer/build/CMakeFiles/rebuild_cache.dir
+/home/lsy/RinzePlayer/build/CMakeFiles/RinzePlayer_autogen_timestamp_deps.dir
+/home/lsy/RinzePlayer/build/CMakeFiles/RinzePlayer_autogen.dir
