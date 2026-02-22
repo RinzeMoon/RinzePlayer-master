@@ -12,16 +12,12 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # 导出编译命令（供 IntelliSense 使用）
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-
-# set(CMAKE_BUILD_TYPE Debug)
-# add_compile_options(-g -o0)
-
 # -------------------------- FFmpeg 静态库配置 --------------------------
 set(FFMPEG_PREFIX "/usr/local" CACHE PATH "FFmpeg 安装路径")
 set(FFMPEG_INCLUDE_DIR "${FFMPEG_PREFIX}/include")
 set(FFMPEG_LIB_DIR "${FFMPEG_PREFIX}/lib")
 
-# FFmpeg 静态库列表（按「高层依赖底层」顺序，避免链接错误）
+# FFmpeg 静态库列表（内部顺序正确：高层依赖底层）
 set(FFMPEG_STATIC_LIBS
         "${FFMPEG_LIB_DIR}/libavfilter.a"
         "${FFMPEG_LIB_DIR}/libavformat.a"
@@ -43,10 +39,10 @@ endforeach()
 # -------------------------- 依赖库查找（纯 CMake 原生，无 pkg-config） --------------------------
 # 1. Qt 库
 find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS
-        Widgets Multimedia MultimediaWidgets OpenGL Network Core Gui
+        Widgets Multimedia MultimediaWidgets OpenGL OpenGLWidgets Network Core Gui
 )
 find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS
-        Widgets Multimedia MultimediaWidgets OpenGL Network Core Gui
+        Widgets Multimedia MultimediaWidgets OpenGL OpenGLWidgets Network Core Gui
 )
 
 # 2. SDL2
@@ -77,22 +73,16 @@ find_library(X264_LIBRARIES NAMES x264 PATHS /usr/lib /usr/local/lib /usr/lib/x8
 find_path(X265_INCLUDE_DIRS NAMES x265.h PATHS /usr/include /usr/local/include /usr/include/x265)
 find_library(X265_LIBRARIES NAMES x265 PATHS /usr/lib /usr/local/lib /usr/lib/x86_64-linux-gnu)
 
-# -------------------------- 依赖完整性验证（修复语法错误：用 CMake 原生方式转小写） --------------------------
+# -------------------------- 依赖完整性验证 --------------------------
 set(REQUIRED_DEPS SDL2 OPUS FDK_AAC MP3LAME VPX X264 X265)
 foreach(dep ${REQUIRED_DEPS})
-
-    # 步骤1：将依赖名转为小写（处理下划线）
     string(TOLOWER ${dep} dep_lower)
-    # 步骤2：特殊处理 FDK_AAC（将下划线替换为连字符，符合 Ubuntu 包名规范）
     if(dep STREQUAL "FDK_AAC")
         set(dep_lower "fdk-aac")
     endif()
-    # 步骤2：验证头文件
     if(NOT ${dep}_INCLUDE_DIRS)
         message(FATAL_ERROR "[依赖缺失] ${dep} 头文件未找到！\nUbuntu 安装命令：sudo apt install lib${dep_lower}-dev")
     endif()
-
-    # 步骤3：验证库文件
     if(NOT ${dep}_LIBRARIES)
         message(FATAL_ERROR "[依赖缺失] ${dep} 库文件未找到！\nUbuntu 安装命令：sudo apt install lib${dep_lower}-dev")
     endif()
@@ -137,8 +127,39 @@ set(PROJECT_SOURCES
         Header/Clock/Clock.h
         src/Lrc/LyricParser.cpp
         Header/Lrc/LyricParser.h
-        src/etc/TestHeader.h
-        src/etc/s.cpp
+        src/BasePlayerFrame.cpp
+        Header/VideoPart/BasePlayerFrame.h
+        src/Controller/StandardController.cpp
+        Header/Controller/StandardController.h
+        src/VideoPlayListWidget.cpp
+        Header/Ui/VideoPlayListWidget.h
+        src/VideoPlayerMW.cpp
+        Header/Ui/VideoPlayerMW.h
+        src/AvSourceParse/AVSourceResolver.cpp
+        Header/VideoPart/AvSourceParse/AVSourceResolver.h
+        src/AvSourceParse/AVRes/AVData.cpp
+        Header/VideoPart/AVRes/AVData.h
+        Header/Factory/AVDataFetcherFactory.h
+        src/AvSourceParse/AVDataFetch/AVDataFetcher.cpp
+        Header/VideoPart/AVDataFetch/AVDataFetcher.h
+        Header/VideoPart/AVDataFetch/LocalFileDataFetcher.h
+        src/AvSourceParse/AVDataFetch/LocalFileDataFetcher.cpp
+        Header/RingBuffer/RingBuffer.cpp
+        Header/RingBuffer/RingBuffer.h
+        Header/VideoPart/OpenGLRender/OpenGLRender.cpp
+        Header/VideoPart/OpenGLRender/OpenGLRender.h
+        Header/VideoPart/AVDecode/AVDecoder.cpp
+        Header/VideoPart/AVDecode/AVDecoder.h
+        Header/VideoPart/MediaPlayer/LocalFilePlayer.cpp
+        Header/VideoPart/MediaPlayer/LocalFilePlayer.h
+        Header/VideoPart/ResManager/ResMgr.cpp
+        Header/VideoPart/ResManager/ResMgr.h
+        Header/VideoPart/AOutput/AudioOutput.cpp
+        Header/VideoPart/AOutput/AudioOutput.h
+        Header/VideoPart/AVSync/AVSync.cpp
+        Header/VideoPart/AVSync/AVSync.h
+        Header/VideoPart/AVDataFetch/MediaDataFetcher.cpp
+        Header/VideoPart/AVDataFetch/MediaDataFetcher.h
 )
 
 # -------------------------- 生成可执行目标 --------------------------
@@ -154,11 +175,36 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
             Header/Controller/PlayQueueController.h
             src/MusicSheetUI.cpp
             Header/Ui/MusicSheetUI.h
+            src/Manager/MusicSheetManager.cpp
+            Header/Manager/MusicSheetManager.h
             src/Clock/Clock.cpp
             Header/Clock/Clock.h
             src/Lrc/LyricParser.cpp
             Header/Lrc/LyricParser.h
-            )
+            src/BasePlayerFrame.cpp
+            Header/VideoPart/BasePlayerFrame.h
+            src/Controller/StandardController.cpp
+            Header/Controller/StandardController.h
+            src/VideoPlayerMW.cpp
+            Header/Ui/VideoPlayerMW.h
+            src/AvSourceParse/AVRes/AVData.cpp
+            Header/VideoPart/AVRes/AVData.h
+            Header/Factory/AVDataFetcherFactory.h
+            src/AvSourceParse/AVDataFetch/AVDataFetcher.cpp
+            Header/VideoPart/AVDataFetch/AVDataFetcher.h
+            Header/VideoPart/AVDataFetch/LocalFileDataFetcher.h
+            src/AvSourceParse/AVDataFetch/LocalFileDataFetcher.cpp
+            Header/RingBuffer/RingBuffer.cpp
+            Header/RingBuffer/RingBuffer.h
+            Header/VideoPart/OpenGLRender/OpenGLRender.cpp
+            Header/VideoPart/OpenGLRender/OpenGLRender.h
+            Header/VideoPart/AVDecode/AVDecoder.cpp
+            Header/VideoPart/AVDecode/AVDecoder.h
+            Header/VideoPart/AOutput/AudioOutput.cpp
+            Header/VideoPart/AOutput/AudioOutput.h
+            Header/VideoPart/AVDataFetch/MediaDataFetcher.cpp
+            Header/VideoPart/AVDataFetch/MediaDataFetcher.h
+    )
 else()
     if(ANDROID)
         add_library(RinzePlayer SHARED ${PROJECT_SOURCES}
@@ -176,6 +222,29 @@ else()
                 Header/Clock/Clock.h
                 src/Lrc/LyricParser.cpp
                 Header/Lrc/LyricParser.h
+                src/BasePlayerFrame.cpp
+                Header/VideoPart/BasePlayerFrame.h
+                src/Controller/StandardController.cpp
+                Header/Controller/StandardController.h
+                src/VideoPlayerMW.cpp
+                Header/Ui/VideoPlayerMW.h
+                src/AvSourceParse/AVRes/AVData.cpp
+                Header/VideoPart/AVRes/AVData.h
+                Header/Factory/AVDataFetcherFactory.h
+                src/AvSourceParse/AVDataFetch/AVDataFetcher.cpp
+                Header/VideoPart/AVDataFetch/AVDataFetcher.h
+                Header/VideoPart/AVDataFetch/LocalFileDataFetcher.h
+                src/AvSourceParse/AVDataFetch/LocalFileDataFetcher.cpp
+                Header/RingBuffer/RingBuffer.cpp
+                Header/RingBuffer/RingBuffer.h
+                Header/VideoPart/OpenGLRender/OpenGLRender.cpp
+                Header/VideoPart/OpenGLRender/OpenGLRender.h
+                Header/VideoPart/AVDecode/AVDecoder.cpp
+                Header/VideoPart/AVDecode/AVDecoder.h
+                Header/VideoPart/AOutput/AudioOutput.cpp
+                Header/VideoPart/AOutput/AudioOutput.h
+                Header/VideoPart/AVDataFetch/MediaDataFetcher.cpp
+                Header/VideoPart/AVDataFetch/MediaDataFetcher.h
         )
     else()
         add_executable(RinzePlayer ${PROJECT_SOURCES}
@@ -191,6 +260,25 @@ else()
                 Header/Clock/Clock.h
                 src/Lrc/LyricParser.cpp
                 Header/Lrc/LyricParser.h
+                src/BasePlayerFrame.cpp
+                Header/VideoPart/BasePlayerFrame.h
+                src/VideoPlayerMW.cpp
+                Header/Ui/VideoPlayerMW.h
+                src/AvSourceParse/AVRes/AVData.cpp
+                Header/VideoPart/AVRes/AVData.h
+                Header/Factory/AVDataFetcherFactory.h
+                src/AvSourceParse/AVDataFetch/AVDataFetcher.cpp
+                Header/VideoPart/AVDataFetch/AVDataFetcher.h
+                Header/VideoPart/AVDataFetch/LocalFileDataFetcher.h
+                src/AvSourceParse/AVDataFetch/LocalFileDataFetcher.cpp
+                Header/RingBuffer/RingBuffer.cpp
+                Header/RingBuffer/RingBuffer.h
+                Header/VideoPart/OpenGLRender/OpenGLRender.cpp
+                Header/VideoPart/OpenGLRender/OpenGLRender.h
+                Header/VideoPart/AOutput/AudioOutput.cpp
+                Header/VideoPart/AOutput/AudioOutput.h
+                Header/VideoPart/AVDataFetch/MediaDataFetcher.cpp
+                Header/VideoPart/AVDataFetch/MediaDataFetcher.h
         )
     endif()
 endif()
@@ -221,20 +309,20 @@ target_compile_options(RinzePlayer PRIVATE
         $<$<CONFIG:Release>:-O2 -march=native>
 )
 
-# 3. 链接依赖（顺序正确）
+# 3. 链接依赖（终极核心：--start-group/--end-group 强制循环解析）
 target_link_libraries(RinzePlayer PRIVATE
-        # Qt 库
+        # Step 1: Qt库（无依赖，最前）
         Qt${QT_VERSION_MAJOR}::Widgets
         Qt${QT_VERSION_MAJOR}::Multimedia
         Qt${QT_VERSION_MAJOR}::MultimediaWidgets
         Qt${QT_VERSION_MAJOR}::OpenGL
+        Qt${QT_VERSION_MAJOR}::OpenGLWidgets
         Qt${QT_VERSION_MAJOR}::Network
         Qt${QT_VERSION_MAJOR}::Core
         Qt${QT_VERSION_MAJOR}::Gui
 
-        # FFmpeg 静态库
-        ${FFMPEG_STATIC_LIBS}
-
+        # Step 2: 强制分组（核心！让链接器循环解析，直到所有符号找到）
+        -Wl,--start-group
         # 编解码器库
         ${FDK_AAC_LIBRARIES}
         ${MP3LAME_LIBRARIES}
@@ -242,11 +330,13 @@ target_link_libraries(RinzePlayer PRIVATE
         ${VPX_LIBRARIES}
         ${X264_LIBRARIES}
         ${X265_LIBRARIES}
-
-        # 基础库
+        # SDL2
         ${SDL2_LIBRARIES}
+        # FFmpeg所有静态库
+        ${FFMPEG_STATIC_LIBS}
+        -Wl,--end-group
 
-        # 系统库
+        # Step 3: 系统库（最后，无循环依赖）
         X11 atomic m z pthread dl va va-drm va-x11 lzma bz2
 )
 

@@ -233,6 +233,12 @@ void PlayQueueController::play()
     playCurrentSong();
 }
 
+void PlayQueueController::resume()
+{
+    auto player = AudioPlayer::getInstance();
+    player->resume();
+}
+
 void PlayQueueController::pause()
 {
     auto player = AudioPlayer::getInstance();
@@ -493,20 +499,18 @@ void PlayQueueController::seek(qint64 position)
     float progress = static_cast<float>(m_currentPosition / m_currentDuration);
     emit progressUpdated(progress,m_currentPosition,m_currentDuration);
 
-    QTimer::singleShot(50, this, [this, position]() {
-        qDebug() << "执行实际seek:" << position;
+    QtConcurrent::run([this, position]() {
+         qDebug() << "[Seek] 开始音频引擎跳转";
 
-        // 调用你的AudioPlayer的seek方法
-        // 假设：if (m_audioPlayer) m_audioPlayer->seek(position);
-        auto player = AudioPlayer::getInstance();
-        player->seek(position);
+         auto player = AudioPlayer::getInstance();
+         player->seek(position); // 假设这是耗时操作
 
-        // 延迟恢复状态（等待FFmpeg处理）
-        QTimer::singleShot(150, this, [this]() {
-            m_Seeking = false;
-            qDebug() << "Seek完成，恢复状态";
-        });
-    });
+         // 跳转完成后，在主线程更新状态
+         QMetaObject::invokeMethod(this, [this]() {
+             m_Seeking = false;
+             qDebug() << "[Seek] 完成，状态已重置";
+         }, Qt::QueuedConnection);
+     });
 }
 
 void PlayQueueController::jumpToIndex(int index)

@@ -37,13 +37,56 @@ namespace RinGlobal
         Error
     };
 
-    // 歌词数据结构：时间戳(毫秒) -> 歌词内容
-    // DEPRECATED: using LyricsMap = QMap<qint64, QString>; // 已弃用，请使用 LyricsList
-
     enum PlayMode {
         Sequential,   // 顺序播放
         LoopSingle,   // 单曲循环
         Random        // 随机播放
+    };
+
+
+    enum VideoPlayerMode {
+        LOCAL_FILE,     // 本地文件播放
+        HTTP_STREAM,    // HTTP点播流
+        RTMP_STREAM     // RTMP直播流
+    };
+
+    enum class AVDataType {
+        AUDIO_FRAME,
+        VIDEO_FRAME,
+        PACKET,           // AVPacket（编码数据）
+        METADATA,
+        END_OF_STREAM     // 流结束标志
+    };
+
+    // 播放列表项数据结构
+    struct PlaylistItem {
+        QString _id;
+        QString title;
+        QString sourceURL;
+        VideoPlayerMode mode;
+        QString duration;
+        bool isActive;
+    };
+
+    struct SourceInfo {
+        QString _id;
+        VideoPlayerMode mode;
+        QString url;                    // 规范化后的URL
+        QString nativePath;             // 平台原生路径（仅对本地文件）
+        QString fileName;               // 文件名
+        QString fileExtension;          // 文件扩展名
+        qint64 fileSize = -1;           // 文件大小（仅对本地文件）
+        bool isValid = false;
+    };
+
+    enum class TranState {
+        IDLE,
+        INITIALIZING,
+        CONNECTING,
+        FETCHING,
+        PAUSED,
+        STOPPED,
+        ERROR
     };
 }
 
@@ -434,6 +477,24 @@ namespace CoverUtil
 #pragma pack(pop)
 }
 
+namespace VideoUtil {
+    struct VideoFrame {
+        uint8_t* data = nullptr;      // 视频像素数据（单平面或平面数组）
+        uint8_t* data_array[4] = {nullptr};  // 多平面数据
+        int linesize[4] = {0};        // 每个平面的行大小
+        int width = 0;                // 宽度
+        int height = 0;               // 高度
+        AVPixelFormat pix_fmt = AV_PIX_FMT_NONE;  // 像素格式
+        int64_t pts = AV_NOPTS_VALUE; // 时间戳
+        bool key_frame = false;       // 是否为关键帧
+
+        // 获取数据指针
+        uint8_t** getData() {
+            return data_array[0] ? data_array : &data;
+        }
+    };
+}
+
 namespace LyricTextType {
     const QString ORIGINAL     = "original";     // 原文 (如日语、中文)
     const QString TRANSLATION  = "translation";  // 翻译 (如中文翻译)
@@ -522,3 +583,46 @@ namespace LrcLine
     using LyricsList = QVector<LrcLine::LyricLine>;
 }
 Q_DECLARE_METATYPE(LrcLine::LyricLine)
+
+namespace idGen
+{
+    /**
+    * @brief 根据文件路径生成4位数字字母混合的ID
+    * @param filePath 文件完整路径
+    * @return 4位数字字母混合的ID（小写字母+数字）
+    */
+    static QString generateFileId(const QString& filePath) {
+        // 1. 处理空路径/无效路径
+        if (filePath.isEmpty()) {
+            return "0000"; // 空路径默认ID
+        }
+
+        // 2. 对文件路径做MD5哈希（统一转UTF-8，避免编码问题）
+        QByteArray hashData = QCryptographicHash::hash(
+            filePath.toUtf8(),
+            QCryptographicHash::Md5
+        );
+
+        // 3. 哈希值转十六进制字符串（包含0-9、a-f）
+        QString hexStr = hashData.toHex();
+
+        // 4. 截取前4位（不足4位补0，超过4位取前4位）
+        QString id = hexStr.left(4).rightJustified(4, '0');
+
+        // 5. 可选优化：确保至少包含1个数字+1个字母（避免全数字/全字母）
+        bool hasDigit = false;
+        bool hasLetter = false;
+        for (QChar c : id) {
+            if (c.isDigit()) hasDigit = true;
+            if (c.isLetter()) hasLetter = true;
+        }
+        // 若不满足混合要求，替换最后一位为字母/数字
+        if (!hasDigit) {
+            id.replace(3, 1, '8'); // 最后一位改为数字8
+        } else if (!hasLetter) {
+            id.replace(3, 1, 'f'); // 最后一位改为字母f
+        }
+
+        return id;
+    }
+}

@@ -4,6 +4,7 @@
 #include <QObject>
 #include <QTimer>
 #include <QRandomGenerator>
+#include <QtConcurrent/QtConcurrent>
 
 #include "../Global/Global.h"
 #include "../Header/Manager/PlaylistManager.h"
@@ -35,6 +36,7 @@ public:
     void play();
     void pause();
     void stop();
+    void resume();
     void next();
     void previous();
     void seek(qint64 position);

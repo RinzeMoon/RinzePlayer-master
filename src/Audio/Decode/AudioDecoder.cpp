@@ -406,6 +406,7 @@ void AudioDecoder::parse_metadata() {
 }
 
 AVRational AudioDecoder::get_audio_time_base() {
+    std::lock_guard<std::mutex> lock(mtx_);
     if (audio_stream_) {
         return audio_stream_->time_base;
     }
@@ -502,9 +503,10 @@ bool AudioDecoder::decode_frame(AudioFrame& out_frame) {
         bool use_resampled = false;
 
         if (need_resample()) {
+            /*
             qInfo() << "[DecodeFrame] 启动重采样（原始格式：" << av_get_sample_fmt_name((AVSampleFormat)frame_->format)
                     << "，原始采样率：" << frame_->sample_rate
-                    << "，原始样本数：" << frame_->nb_samples << "）";
+                    << "，原始样本数：" << frame_->nb_samples << "）";*/
 
             // 计算目标样本数
             int dst_nb_samples = av_rescale_rnd(
@@ -544,11 +546,11 @@ bool AudioDecoder::decode_frame(AudioFrame& out_frame) {
                 av_frame_unref(resampled_frame_);
                 return false;
             }
-
+            /*
             qInfo() << "[DecodeFrame] 重采样缓冲区分配成功（data[0]：" << (void*)resampled_frame_->data[0]
                     << "，对齐检查：" << ((uintptr_t)resampled_frame_->data[0] % 16 == 0 ? "16字节对齐" : "未对齐")
                     << "，缓冲区大小：" << resampled_frame_->linesize[0] << "字节）";
-
+            */
             // 执行重采样
             int converted_samples = swr_convert(
                 swr_ctx_,
@@ -568,7 +570,7 @@ bool AudioDecoder::decode_frame(AudioFrame& out_frame) {
             }
 
             resampled_frame_->nb_samples = converted_samples;
-            qInfo() << "[DecodeFrame] 重采样成功（转换后样本数：" << converted_samples << "）";
+            //qInfo() << "[DecodeFrame] 重采样成功（转换后样本数：" << converted_samples << "）";
 
             final_frame = resampled_frame_;
             use_resampled = true;
@@ -583,11 +585,12 @@ bool AudioDecoder::decode_frame(AudioFrame& out_frame) {
             return false;
         }
 
+        /*
         qInfo() << "[DecodeFrame] 最终帧验证通过（格式：" << av_get_sample_fmt_name((AVSampleFormat)final_frame->format)
                 << "，声道数：" << final_frame->channels
                 << "，样本数：" << final_frame->nb_samples
                 << "，数据指针：" << (void*)final_frame->data[0] << "）";
-
+        */
         // 填充自定义AudioFrame
         out_frame.channels = final_frame->channels;
         out_frame.sample_rate = final_frame->sample_rate;
@@ -599,10 +602,10 @@ bool AudioDecoder::decode_frame(AudioFrame& out_frame) {
         int bytes_per_sample = av_get_bytes_per_sample(out_frame.sample_fmt);
         size_t channel_data_size = (size_t)out_frame.nb_samples * bytes_per_sample;
         size_t total_data_size = channel_data_size * out_frame.channels;
-
+        /*
         qInfo() << "[DecodeFrame] 计算缓冲区：单声道=" << channel_data_size << "字节，总大小=" << total_data_size
                 << "字节（样本数=" << out_frame.nb_samples << "，字节/样本=" << bytes_per_sample << "）";
-
+        */
         // 分配指针数组
         out_frame.data = new (std::nothrow) uint8_t*[out_frame.channels];
         if (!out_frame.data) {
@@ -628,11 +631,11 @@ bool AudioDecoder::decode_frame(AudioFrame& out_frame) {
 
             out_frame.data[0] = buffer;
             out_frame.data[1] = nullptr;
-
+            /*
             qInfo() << "[DecodeFrame] 交错缓冲区：地址=" << (void*)buffer
                     << "，对齐检查：" << ((uintptr_t)buffer % align == 0 ? "通过" : "失败")
                     << "，大小=" << total_data_size << "字节";
-
+            */
             memcpy(out_frame.data[0], final_frame->data[0], total_data_size);
         } else if (out_frame.sample_fmt == AV_SAMPLE_FMT_S16P) {
             for (int i = 0; i < out_frame.channels; i++) {
@@ -652,10 +655,10 @@ bool AudioDecoder::decode_frame(AudioFrame& out_frame) {
 
                 out_frame.data[i] = buffer;
                 memcpy(out_frame.data[i], final_frame->data[i], channel_data_size);
-
+                /*
                 qInfo() << "[DecodeFrame] 平面缓冲区（声道" << i << "）：地址=" << (void*)buffer
                         << "，对齐检查：" << ((uintptr_t)buffer % align == 0 ? "通过" : "失败")
-                        << "，大小=" << channel_data_size << "字节";
+                        << "，大小=" << channel_data_size << "字节";*/
             }
         } else {
             qCritical() << "[DecodeFrame] 不支持的音频格式：" << av_get_sample_fmt_name(out_frame.sample_fmt);
@@ -668,7 +671,7 @@ bool AudioDecoder::decode_frame(AudioFrame& out_frame) {
 
         // 计算linesize
         out_frame.linesize = (out_frame.sample_fmt == AV_SAMPLE_FMT_S16) ? total_data_size : channel_data_size;
-        qInfo() << "[DecodeFrame] 填充完成：linesize=" << out_frame.linesize << "，data[0]=" << (void*)out_frame.data[0];
+        //qInfo() << "[DecodeFrame] 填充完成：linesize=" << out_frame.linesize << "，data[0]=" << (void*)out_frame.data[0];
 
         // 释放临时资源
         av_frame_unref(frame_);
@@ -677,7 +680,7 @@ bool AudioDecoder::decode_frame(AudioFrame& out_frame) {
         }
 
         // 解码成功
-        qInfo() << "[DecodeFrame] 解码完成，成功输出一帧";
+        // qInfo() << "[DecodeFrame] 解码完成，成功输出一帧";
         return true;
     }
 }
@@ -687,7 +690,7 @@ bool AudioDecoder::seek(int64_t target_ms) {
     if (!fmt_ctx_ || !audio_stream_) return false;
 
     int64_t target_pts = (int64_t)(target_ms / 1000.0 * audio_stream_->time_base.den / audio_stream_->time_base.num);
-    int ret = avformat_seek_file(fmt_ctx_, audio_stream_index_, 0, target_pts, target_pts, 0);
+    int ret = avformat_seek_file(fmt_ctx_, audio_stream_index_, 0, target_pts, target_pts, AVSEEK_FLAG_BACKWARD);
     if (ret < 0) {
         char err_buf[AV_ERROR_MAX_STRING_SIZE] = {0};
         av_strerror(ret, err_buf, sizeof(err_buf));
@@ -725,4 +728,44 @@ void AudioDecoder::release_Frame(AudioFrame& out_frame) {
     // 释放指针数组
     delete[] out_frame.data;
     out_frame.data = nullptr;
+}
+
+
+
+double AudioDecoder::get_current_time()
+{
+    std::lock_guard<std::mutex> lock(mtx_);
+
+    if (!is_initialized_ || !audio_stream_) {
+        return 0.0;
+    }
+
+    // 如果有当前的解码帧，使用帧的PTS
+    if (frame_ && frame_->pts != AV_NOPTS_VALUE) {
+        return frame_->pts * av_q2d(audio_stream_->time_base);
+    }
+
+    // 如果没有帧信息，返回0
+    return 0.0;
+}
+
+double AudioDecoder::get_duration_in_seconds()
+{
+    if (!is_initialized_ || !audio_stream_) {
+        return 0.0;
+    }
+
+    // 使用流时长，如果无效则使用容器时长
+    if (audio_stream_->duration != AV_NOPTS_VALUE) {
+        return audio_stream_->duration * av_q2d(audio_stream_->time_base);
+    } else if (fmt_ctx_->duration != AV_NOPTS_VALUE) {
+        return fmt_ctx_->duration / (double)AV_TIME_BASE;
+    }
+
+    return 0.0;
+}
+
+int64_t AudioDecoder::get_current_position_ms()
+{
+    return static_cast<int64_t>(get_current_time() * 1000);
 }

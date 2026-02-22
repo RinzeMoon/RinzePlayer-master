@@ -485,7 +485,6 @@ public:
         }
     }
 
-    // 【实例方法】开始滚动当前标签
     void startScroll()
     {
         if (m_needScroll && !m_isScrolling) {
@@ -495,7 +494,6 @@ public:
         }
     }
 
-    // 【实例方法】停止滚动当前标签
     void stopScroll()
     {
         if (m_isScrolling) {
@@ -504,7 +502,7 @@ public:
             update(); // 刷新显示（停在当前位置）
         }
     }
-    // 【实例方法】切换滚动状态（开始→停止/停止→开始）
+
     void toggleScroll()
     {
         if (m_isScrolling) {
@@ -531,14 +529,17 @@ protected:
         QFontMetrics metrics(font());
 
         // 计算文本垂直居中位置
-        int y = rect.y() + (rect.height() + metrics.ascent() - metrics.descent()) / 2 - metrics.ascent();
+        int textHeight = metrics.height(); // 文本总高度（ascent + descent）
+        // 计算基线位置：垂直居中 = 区域顶部 + (区域高度 - 文本高度)/2 + 上行高度（ascent）
+        int baselineY = rect.top() + (rect.height() - textHeight) / 2 + metrics.ascent();
 
         // 绘制主文本（根据滚动位置偏移）
-        painter.drawText(rect.x() - m_scrollPos, y, m_originalText);
+        painter.drawText(rect.x() - m_scrollPos, baselineY, m_originalText);
 
-        // 绘制衔接文本实现无缝循环
+        // 绘制衔接文本实现无缝循环（优化衔接位置，避免间隙/重叠）
+        int offset = m_textWidth + rect.width(); // 完整的衔接间隔
         if (m_scrollPos > rect.width()) {
-            painter.drawText(rect.x() - m_scrollPos + m_textWidth + rect.width() / 2, y, m_originalText);
+            painter.drawText(rect.x() - m_scrollPos + offset, baselineY, m_originalText);
         }
     }
 

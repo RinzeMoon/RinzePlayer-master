@@ -53,6 +53,10 @@ public:
 
     bool initialize_after_open();
 
+    double get_current_time();
+    double get_duration_in_seconds();
+    int64_t get_current_position_ms();
+
 private:
     // 私有方法
     bool open_with_interrupt(const QString& file_path);

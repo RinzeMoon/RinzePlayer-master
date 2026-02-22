@@ -16,7 +16,8 @@ AudioPlaylistPopup::AudioPlaylistPopup(QWidget* parent) : QWidget(parent) {
     m_parser = AudioMetaParser::getInstance();
     setWindowFlags(Qt::Widget); // 或者完全移除setWindowFlags调用
 
-    setFixedSize(420, 600);
+    //setFixedSize(420, 600);
+    setFixedWidth(420);
     initUI();
     initConnections();
 
@@ -71,7 +72,7 @@ void AudioPlaylistPopup::initUI() {
     m_listWidget = new QListWidget(outerContainer);
     m_listWidget->setSelectionMode(QAbstractItemView::SingleSelection);
     m_listWidget->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    m_listWidget->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    m_listWidget->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOn);
     m_listWidget->setStyleSheet(R"(
         QListWidget { border: none; background-color: #F9F9F9; }
         QListWidget::item {
@@ -91,8 +92,8 @@ void AudioPlaylistPopup::initUI() {
         QScrollBar::handle:vertical { background: #CCC; border-radius: 3px; }
         QScrollBar::handle:vertical:hover { background: #AAA; }
     )");
-    m_listWidget->setMinimumHeight(600);
-    m_listWidget->setMaximumHeight(800);
+    m_listWidget->setMinimumHeight(400);
+    m_listWidget->setMaximumHeight(700);
 
     // 4. 底部按钮栏（原始样式）
     QWidget* btnBar = new QWidget(outerContainer);

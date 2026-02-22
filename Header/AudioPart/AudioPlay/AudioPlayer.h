@@ -13,6 +13,7 @@
 #include <Global.h>
 #include <QMutex>
 #include <QTimer>
+#include <QCoreApplication>
 
 #include "Clock/Clock.h"
 
@@ -31,6 +32,8 @@ public:
         return &instance;
     }
 
+    void resetDecoderState();
+
     AudioPlayer(const AudioPlayer&) = delete;
     AudioPlayer& operator=(const AudioPlayer&) = delete;
 
@@ -47,7 +50,6 @@ public:
         qDebug() << "[initAndStartThread] 工作线程是否完成:" << m_workThread->isFinished();
 
         this->moveToThread(m_workThread);
-
         m_workThread->start();
 
         qDebug() << "[initAndStartThread] 线程启动后状态 - 运行中:" << m_workThread->isRunning();
@@ -58,6 +60,9 @@ public:
     int64_t getCurrentPositionMs() const { return m_clock->getTimeMs(); }
     int64_t getTotalDurationMs() const { return m_totalDurationMs; }
 
+    int preDecodeAfterSeek(int numFrames);
+    void checkSDLStatus();
+
 signals:
     void stateChanged(PlayState state);
     void positionChanged(qint64 position);
@@ -67,12 +72,16 @@ signals:
     void playbackFinished();
     void currentSongFinished();
 
+    void internalSeekRequested(qint64 positionMs);
+
 public slots:
     bool play(const QString &filePath);
     void pause();
     void stop();
     void seek(int64_t targetMs);
     void resume();
+
+    void handleInternalSeek(qint64 positionMs);
 
 private slots:
     void runPlayLoop(const QString &filePath);
@@ -135,6 +144,17 @@ private:
     // 时钟系统
     Clock* m_clock;
     QTimer* m_progressTimer;
+
+    // 一些锁 & 标志
+    // 原子操作的状态标志
+    std::atomic<bool> m_seekPending{false};
+    std::atomic<qint64> m_seekTargetMs{0};
+    std::atomic<int64_t> m_pausedPositionMs{0};
+    // 保护解码器操作的互斥锁（仅用于seek和解码器访问）
+    QMutex m_decoderMutex;
+
+    QElapsedTimer m_lastSeekTime;  // 记录上次跳转时间
+    const int MIN_SEEK_INTERVAL_MS = 200;  // 最小跳转间隔200ms
 };
 
 #endif //RINZEPLAYER_AUDIOPLAYER_H

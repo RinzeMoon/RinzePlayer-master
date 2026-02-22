@@ -498,13 +498,25 @@ void AudioControlBar::connectSignals()
         controller->pause();
         updatePlayPauseIcon();
     }
-    else
+    else if (m_currentState == RinGlobal::PlayState::Paused)
     {
-        qDebug() << "[PLAYING]";
-        controller->play();
+        qDebug() << "[RESUMING]";
+        controller->resume();  // 调用 resume() 而不是 play()
+        updatePlayPauseIcon();
+    }
+    else  // Stopped 或其他状态
+    {
+        qDebug() << "[PLAYING from stop]";
+        controller->play();  // 只有停止状态才调用 play()
         updatePlayPauseIcon();
     }
 });
+    connect(player,&AudioPlayer::stateChanged,this,[=](PlayState state)
+    {
+        m_currentState = state;
+        updatePlayPauseIcon();
+    });
+
 
     connect(m_btnPrev, &QPushButton::clicked, controller, &PlayQueueController::previous);
     connect(m_btnNext, &QPushButton::clicked, controller, &PlayQueueController::next);
@@ -925,7 +937,8 @@ AudioPlaylistPopup* AudioControlBar::getPlaylistPopup()
     return m_playlistDlg;
 }
 
-void AudioControlBar::onProgressSliderPressed() {
+void AudioControlBar::onProgressSliderPressed()
+{
     m_isProgressSliderDragging = true;
     qDebug() << "[进度条] 用户开始拖动，标志设为 true";
 }
@@ -959,14 +972,14 @@ void AudioControlBar::onProgressSliderReleasedInternal() {
 // 进度更新槽函数
 void AudioControlBar::onProgressUpdated(float progress, int64_t currentMs, int64_t totalMs) {
 
-    qDebug() << "[AudioControlBar]:#######################进度条变化信号";
+    // qDebug() << "[AudioControlBar]:#######################进度条变化信号";
     // 保存总时长
     m_totalDurationMs = totalMs;
 
     // 如果用户没有拖动进度条，才自动更新
     if (!m_isProgressSliderDragging) {
         // 计算进度条值 (0-100)
-        int sliderValue = static_cast<int>(progress * 100);
+        int sliderValue = static_cast<int>(progress * 1000);
 
         // 防止信号循环：临时阻塞信号
         bool wasBlocked = m_progressSlider->signalsBlocked();

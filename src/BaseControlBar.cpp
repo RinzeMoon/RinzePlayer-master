@@ -297,9 +297,9 @@ void BaseControlBar::updatePlayPauseIcon()
     if (!m_btnPlayPause) return;
 
     if (m_currentState == PlayState::Playing) {
-        m_btnPlayPause->setIcon(QIcon("../images/icons/pause.png"));
-    } else {
         m_btnPlayPause->setIcon(QIcon("../images/icons/play.png"));
+    } else {
+        m_btnPlayPause->setIcon(QIcon("../images/icons/pause.png"));
     }
 }
 

@@ -16,14 +16,14 @@
             "singer": "罗大佑"
         },
         {
-            "album": "之乎者也",
-            "coverUrl": "",
+            "album": "LSC",
+            "coverUrl": "../images/MusicCover/水星.png",
             "duration": "222",
-            "genre": "民谣",
+            "genre": "JPop",
             "id": "song_002",
-            "name": "童年",
-            "path": "../music/童年.mp3",
-            "singer": "罗大佑"
+            "name": "水星",
+            "path": "../music/水星.mp3",
+            "singer": "ラブリーサマーちゃん"
         },
         {
             "album": "首都",

@@ -33,9 +33,19 @@ class AudioItemWidget : public QWidget {
     Q_OBJECT
 public:
     explicit AudioItemWidget(const AudioMeta& meta, QWidget* parent = nullptr)
-        : QWidget(parent), m_meta(meta), m_index(0) {
+    : QWidget(parent), m_meta(meta), m_index(0) {
         initUI();
+        // 立即调用一次，看看情况
         updateTextLayout();
+
+        // 延迟调用，确保控件已布局完成
+        QTimer::singleShot(50, this, [this]() {
+            updateTextLayout();
+        });
+
+        QTimer::singleShot(200, this, [this]() {
+            updateTextLayout();
+        });
     }
 
     void setIndex(int index) {
@@ -80,7 +90,7 @@ private:
         textLayout->setSpacing(2);
 
         // 标题（不变）
-        m_titleLabel = new QLabel(this);
+        m_titleLabel = new QLabel(textContainer);
         QFont titleFont = m_titleLabel->font();
         titleFont.setBold(true);
         titleFont.setPointSize(14);
@@ -92,7 +102,7 @@ private:
         )");
 
         // 艺术家（不变）
-        m_artistLabel = new QLabel(this);
+        m_artistLabel = new QLabel(textContainer);
         m_artistLabel->setStyleSheet(R"(
             color: #999;
             font-size: 12px;
@@ -100,7 +110,7 @@ private:
         )");
 
         // -------------------------- 新增：专辑信息 --------------------------
-        m_albumLabel = new QLabel(this);
+        m_albumLabel = new QLabel(textContainer);
         m_albumLabel->setStyleSheet(R"(
             color: #BBB; /* 比艺术家颜色更浅，区分层级 */
             font-size: 11px;
@@ -119,7 +129,7 @@ private:
         rightLayout->setSpacing(1);
 
         // 时长（原逻辑保留，放入右侧容器）
-        m_durationLabel = new QLabel(this);
+        m_durationLabel = new QLabel(rightContainer);
         m_durationLabel->setStyleSheet(R"(
             color: #999;
             font-size: 12px;
@@ -128,7 +138,7 @@ private:
         m_durationLabel->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
 
         // -------------------------- 新增：格式+比特率 --------------------------
-        m_formatLabel = new QLabel(this);
+        m_formatLabel = new QLabel(rightContainer);
         m_formatLabel->setStyleSheet(R"(
             color: #BBB; /* 浅色，不抢眼 */
             font-size: 10px;
@@ -154,11 +164,13 @@ private:
         setStyleSheet("border: none;");
         setLayout(mainLayout);
         setFixedHeight(74); // 高度不变，垂直紧凑排列
+
+        QTimer::singleShot(50, this, &AudioItemWidget::updateTextLayout); // 使用更长的延迟
     }
 
     void updateCover() {
         if (m_meta.cover.isNull()) {
-            m_coverLabel->setText("音");
+            m_coverLabel->setText("♪");
             m_coverLabel->setStyleSheet("color: #999; border-radius: 2px; background: #F5F5F5;");
             return;
         }
@@ -167,38 +179,59 @@ private:
     }
 
     void updateTextLayout() {
-        // 原有信息更新
-        QString titleText = m_meta.title.isEmpty() ? QFileInfo(m_meta.filePath).fileName() : m_meta.title;
-        QString artistText = m_meta.artist.isEmpty() ? "未知艺术家" : m_meta.artist;
-        m_durationLabel->setText(m_meta.durationString());
 
-        // -------------------------- 新增信息更新 --------------------------
-        // 专辑（无则显示"未知专辑"）
-        QString albumText = m_meta.album.isEmpty() ? "未知专辑" : m_meta.album;
-        // 格式+比特率（如"MP3 · 320kbps"，无则显示"未知格式"）
-        QString formatText;
-        if (!m_meta.format.isEmpty() && m_meta.bitRate > 0) {
-            formatText = QString("%1 · %2kbps").arg(m_meta.format).arg(m_meta.bitRate);
-        } else {
-            formatText = "未知格式";
-        }
+    // 原有信息更新
+    QString titleText = m_meta.title.isEmpty() ? QFileInfo(m_meta.filePath).fileName() : m_meta.title;
+    QString artistText = m_meta.artist.isEmpty() ? "未知艺术家" : m_meta.artist;
+    QString albumText = m_meta.album.isEmpty() ? "未知专辑" : m_meta.album;
 
-        // 文本省略处理（适配宽度）
-        int textWidth = m_titleLabel->width() - 20;
-        if (textWidth <= 0) textWidth = 200;
-        QFontMetrics titleMetrics(m_titleLabel->font());
-        QFontMetrics artistMetrics(m_artistLabel->font());
-        QFontMetrics albumMetrics(m_albumLabel->font()); // 专辑文本省略
+    m_durationLabel->setText(m_meta.durationString());
 
-        m_titleLabel->setText(titleMetrics.elidedText(titleText, Qt::ElideRight, textWidth));
-        m_artistLabel->setText(artistMetrics.elidedText(artistText, Qt::ElideRight, textWidth));
-        m_albumLabel->setText(albumMetrics.elidedText(albumText, Qt::ElideRight, textWidth)); // 专辑省略
-        m_formatLabel->setText(formatText); // 格式信息短，无需省略
+    // 格式信息
+    QString formatText;
+    if (!m_meta.format.isEmpty() && m_meta.bitRate > 0) {
+        formatText = QString("%1 · %2kbps").arg(m_meta.format).arg(m_meta.bitRate);
+    } else {
+        formatText = "未知格式";
     }
+    m_formatLabel->setText(formatText);
+
+    // 使用整个控件的宽度来计算文本可用宽度，而不是依赖标签的瞬时宽度
+    int totalWidth = width();
+
+    // 计算固定部分的总宽度：
+    // - 序号标签：30
+    // - 第一个间距：8
+    // - 封面：50
+    // - 第二个间距：12
+    // - 最后一个间距：8
+    // - 右侧信息区（时长+格式）：预估120（根据内容自适应）
+    int fixedWidth = 30 + 8 + 50 + 12 + 8 + 120; // 大约 228
+
+    // 文本可用宽度 = 总宽度 - 固定部分 - 额外边距
+    int textAvailableWidth = totalWidth - fixedWidth - 20; // 减去额外边距
+    // 确保最小可用宽度
+    if (textAvailableWidth < 50) textAvailableWidth = 50;
+
+    QFontMetrics titleMetrics(m_titleLabel->font());
+    QFontMetrics artistMetrics(m_artistLabel->font());
+    QFontMetrics albumMetrics(m_albumLabel->font());
+
+    m_titleLabel->setText(titleMetrics.elidedText(titleText, Qt::ElideRight, textAvailableWidth));
+    m_artistLabel->setText(artistMetrics.elidedText(artistText, Qt::ElideRight, textAvailableWidth));
+    m_albumLabel->setText(albumMetrics.elidedText(albumText, Qt::ElideRight, textAvailableWidth));
+
+}
 
     void resizeEvent(QResizeEvent* event) override {
         Q_UNUSED(event);
-        updateTextLayout(); //  resize时同步更新文本省略
+        updateTextLayout(); // resize时同步更新文本省略
+    }
+
+    void showEvent(QShowEvent* event) {
+        QWidget::showEvent(event);
+        // 窗口显示时更新文本布局，此时控件已有正确的尺寸
+        updateTextLayout();
     }
 
 private:
@@ -276,7 +309,8 @@ public:
         widget->setIndex(index + 1); // 立即设置正确的索引
 
         QListWidgetItem* listItem = new QListWidgetItem(m_listWidget);
-        listItem->setSizeHint(widget->sizeHint());
+        //listItem->setSizeHint(widget->sizeHint());
+        listItem->setSizeHint(QSize(400, 74));
         listItem->setData(Qt::UserRole, QVariant::fromValue(meta)); // 重要：存储元数据
 
         m_listWidget->setItemWidget(listItem, widget);

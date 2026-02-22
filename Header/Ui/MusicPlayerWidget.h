@@ -17,6 +17,7 @@
 #include <QFrame>
 #include <QTimer>
 #include <QElapsedTimer>
+#include <QScrollBar>
 
 #include "../../Global/Global.h"
 #include "../Header/Clock/Clock.h"
@@ -69,6 +70,9 @@ public:
     void stop();
     void seekForward(qint64 ms = 5000);
     void seekBackward(qint64 ms = 5000);
+
+    // 新增：绑定到主时钟（AudioPlayer单例的m_clock）
+    void bindToMasterClock(Clock* masterClock);
 
     // 清空所有数据
     void clearAllData();
@@ -124,6 +128,13 @@ private slots:
     // 内部定时器槽
     void updateUIFromClock();
 
+    // 新增：歌词滚动动画定时器槽
+    void updateScrollAnimation();
+
+private slots:
+    // 异步歌词解析完成的回调（UI线程执行）
+    void onLyricsParseFinished(bool success, const LyricsList& lines, const QString& errorMsg);
+
 private:
     // ==================== 初始化函数 ====================
     void initUI();
@@ -145,8 +156,14 @@ private:
     // ==================== 时间处理 ====================
     QString formatTime(qint64 ms) const;
     void updateTimeDisplay();
+    void updateTimeDisplayFromMs(qint64 ms);
 
-private:
+    // ==================== 新增：固定中心高亮歌词功能 ====================
+    // 歌词滚动相关
+    void scrollLyricsToCurrentLine();
+    void updateLyricsStyle();
+    void setupLyricsViewport();
+
     // ==================== 播放状态 ====================
     bool m_hasCurrentSong = false;
 
@@ -166,6 +183,20 @@ private:
     // ==================== 定时器 ====================
     QTimer *m_uiUpdateTimer = nullptr;
 
+    // ==================== 新增：歌词滚动动画定时器 ====================
+    QTimer *m_scrollTimer = nullptr;
+
+    // ==================== 新增：歌词滚动动画控制 ====================
+    int m_targetScrollPosition = 0;
+    int m_scrollAnimationStep = 0;
+    bool m_isScrolling = false;
+
+    // ==================== 新增：歌词样式控制 ====================
+    int m_currentCenterLine = -1;
+    QColor m_highlightColor;
+    int m_normalFontSize = 14;
+    int m_centerFontSize = 20;
+
     // ==================== UI组件 ====================
     // 左侧专辑封面区域
     QFrame *m_leftFrame = nullptr;
@@ -183,9 +214,19 @@ private:
     // 歌词区域
     QListWidget *m_lyricsList = nullptr;
 
+    // ==================== 新增：歌词显示区域组件 ====================
+    QFrame *m_lyricsViewport = nullptr;      // 歌词显示视口
+    QLabel *m_centerLineIndicator = nullptr; // 固定中心线指示器
+
     // 毛玻璃效果
     QGraphicsBlurEffect *m_blurEffect = nullptr;
     QPixmap m_parentBgCache;
+
+    QPointer<LyricParserThreadPool> m_lyricThreadPool; // 歌词解析线程池（单例）
+    LyricsList m_lyricsCache;                         // 缓存解析后的歌词（UI线程访问）
+    bool m_loadingLyrics = false;                     // 标记是否正在加载歌词
+    QString m_pendingLyricPath;                       // 待加载的歌词文件路径（防重复请求）
+
 };
 
 #endif // RINZEPLAYER_MUSICPLAYERWIDGET_H
