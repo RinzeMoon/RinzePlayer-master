@@ -1,6 +1,6 @@
 # 流媒体播放器 - RinzePlayer
 
-[!License: GPLv3](https://img.shields.io/badge/License-GPLv3-blue.svg)
+[![License: GPLv3](https://img.shields.io/badge/License-GPLv3-blue.svg)]
 [![C++17](https://img.shields.io/badge/C%2B%2B-17-blue.svg)](https://isocpp.org/)\
 [![FFmpeg](https://img.shields.io/badge/FFmpeg-4.4+-green.svg)](https://ffmpeg.org/)
 [![Qt](https://img.shields.io/badge/Qt-6.9.2-brightgreen.svg)](https://www.qt.io/)
@@ -19,7 +19,7 @@
   - 音频：SDL2 音频输出，自动适配设备
 - **性能优化**：
   - 多线程解码：解复用、音频解码、视频解码独立线程
-  - 无锁环形缓冲区（RingBuffer）传递 AVPacket/AVFrame
+  - 环形缓冲区（RingBuffer）传递 AVPacket/AVFrame
   - 动态丢帧策略，保证同步流畅
 - **扩展性**：
   - 协议处理器工厂，新增协议只需继承 `AVDataFetcher`
