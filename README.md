@@ -1,6 +1,6 @@
 # 流媒体播放器 - RinzePlayer
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)](https://img.shields.io/badge/License-GPLv3-blue.svg)
 [![C++17](https://img.shields.io/badge/C%2B%2B-17-blue.svg)](https://isocpp.org/)\
 [![FFmpeg](https://img.shields.io/badge/FFmpeg-4.4+-green.svg)](https://ffmpeg.org/)
 [![Qt](https://img.shields.io/badge/Qt-6.9.2-brightgreen.svg)](https://www.qt.io/)
@@ -66,7 +66,7 @@ ninja
 ```
 ## 📄 许可证
 
-本项目基于 MIT 许可证开源，详情请参见 [LICENSE](LICENSE) 文件。
+本项目基于 GPL v3 许可证开源，详情请参见 [LICENSE](LICENSE) 文件。
 
 ## 📬 联系方式
 
