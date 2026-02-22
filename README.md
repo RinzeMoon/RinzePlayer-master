@@ -1,6 +1,6 @@
 # 流媒体播放器 - RinzePlayer
 
-[![License: GPLv3](https://img.shields.io/badge/License-GPLv3-blue.svg)
+[![License: GPLv3](https://img.shields.io/badge/License-GPLv3-blue.svg)]
 [![C++17](https://img.shields.io/badge/C%2B%2B-17-blue.svg)](https://isocpp.org/)\
 [![FFmpeg](https://img.shields.io/badge/FFmpeg-4.4+-green.svg)](https://ffmpeg.org/)
 [![Qt](https://img.shields.io/badge/Qt-6.9.2-brightgreen.svg)](https://www.qt.io/)
