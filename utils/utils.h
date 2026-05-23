@@ -1,0 +1,222 @@
+// SPDX-FileCopyrightText: 2025-2026 Xuefei Ai
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+#ifdef _MSC_VER
+#pragma warning(disable : 4324)
+#endif
+#ifndef UTILS_H
+#define UTILS_H
+#include "compat/compat.h"
+#include "types/types.h"
+#include <atomic>
+#include <deque>
+#include <mutex>
+#include <vector>
+
+// 枚举转idx
+template <typename E>
+constexpr auto to_index(E e) -> std::underlying_type_t<E> {
+    return static_cast<std::underlying_type_t<E>>(e);
+}
+
+class DeviceStatus {
+public:
+    bool initialized() {
+        return (!m_haveAudio || m_audioInitialized) && (!m_haveVideo || m_videoInitialized);
+    }
+
+    bool audioInitialized() const { return m_audioInitialized; }
+    void setAudioInitialized(bool newAudioInitialized) { m_audioInitialized = newAudioInitialized; }
+
+    bool videoInitialized() const { return m_videoInitialized; }
+    void setVideoInitialized(bool newVideoInitialized) { m_videoInitialized = newVideoInitialized; }
+
+    bool haveVideo() const { return m_haveVideo; }
+    void setHaveVideo(bool newHaveVideo) { m_haveVideo = newHaveVideo; }
+
+    bool haveAudio() const { return m_haveAudio; }
+    void setHaveAudio(bool newHaveAudio) { m_haveAudio = newHaveAudio; }
+
+    static DeviceStatus &instance() {
+        static DeviceStatus ds;
+        return ds;
+    }
+
+private:
+    bool m_audioInitialized{false}, m_videoInitialized{false};
+    bool m_haveVideo{false}, m_haveAudio{false};
+
+    DeviceStatus(const DeviceStatus &) = delete;
+    DeviceStatus &operator=(const DeviceStatus &) = delete;
+
+    DeviceStatus() : m_audioInitialized(false), m_videoInitialized(false) {}
+};
+
+/**
+ * 单生产者单消费者的有限无锁队列(缓冲区)
+ */
+template <typename T>
+class SPSCQueue {
+public:
+    explicit SPSCQueue(size_t capacity)
+        : m_capacity(capacity + 1), // 多分配一个，用于处理满条件
+          m_buffer(m_capacity) {}
+
+    bool push(const T &value) {
+        // 生产者本地快照
+        size_t current_tail = m_tail.load(std::memory_order_relaxed);
+        size_t next_tail = nextIndex(current_tail);
+
+        // 检查队列是否已满
+        if (next_tail == m_head.load(std::memory_order_acquire)) {
+            return false; // 队列满，推送失败
+        }
+
+        // 将数据存入当前tail指向的位置
+        m_buffer[current_tail] = value;
+
+        // 发布tail的更新，确保前面的数据存储对消费者可见
+        m_tail.store(next_tail, std::memory_order_release);
+        return true;
+    }
+
+    bool pop(T &value) {
+        // 消费者本地快照
+        size_t current_head = m_head.load(std::memory_order_relaxed);
+
+        // 检查队列是否为空
+        if (current_head == m_tail.load(std::memory_order_acquire)) {
+            return false; // 队列空，弹出失败
+        }
+
+        // 从当前head指向的位置取出数据
+        value = m_buffer[current_head];
+
+        // 发布head的更新，告知生产者新的头部位置
+        m_head.store(nextIndex(current_head), std::memory_order_release);
+        return true;
+    }
+
+    /**
+     * 获取第一个有效的元素
+     * @note 请确保pop与peekSecond只在同一个线程下使用
+     */
+    bool peekFirst(T &value) {
+        // 消费者本地快照
+        size_t current_head = m_head.load(std::memory_order_relaxed);
+
+        // 检查队列是否为空
+        if (current_head == m_tail.load(std::memory_order_acquire)) {
+            return false; // 队列空，弹出失败
+        }
+
+        // 从当前head指向的位置取出数据
+        value = m_buffer[current_head];
+        return true;
+    }
+
+    size_t size() const {
+        size_t head = m_head.load(std::memory_order_acquire);
+        size_t tail = m_tail.load(std::memory_order_acquire);
+        if (tail >= head)
+            return tail - head;
+        else
+            return m_capacity - head + tail;
+    }
+
+    size_t capacity() const {
+        return m_capacity - 1;
+    }
+
+    int serial() const { return m_serial.load(std::memory_order_relaxed); }
+    void addSerial() { m_serial.fetch_add(1); }
+
+private:
+    size_t nextIndex(size_t index) const {
+        return (index + 1) % m_capacity;
+    }
+
+    const size_t m_capacity; // 环形缓冲区的总容量（包括浪费的一个位置）
+    std::vector<T> m_buffer; // 数据缓冲区
+
+    alignas(hardware_destructive_interference_size) std::atomic<size_t> m_head{0}; // 读索引（消费者使用）
+    alignas(hardware_destructive_interference_size) std::atomic<size_t> m_tail{0}; // 写索引（生产者使用）
+    std::atomic<int> m_serial{0};
+};
+
+class AVPktQueue {
+public:
+    explicit AVPktQueue(size_t maxMB = 2)
+        : m_maxBytes(maxMB * 1024 * 1024), m_currentBytes(0) {
+    }
+
+    bool push(const AVPktItem &item) {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        size_t pktSize = item.pkt ? item.pkt->size : 0;
+
+        // 在不超过最大容量的情况下最少16帧
+        if (pktSize + m_currentBytes > m_maxBytes && m_queue.size() >= 16) {
+            return false; // 超出总容量限制
+        }
+
+        m_queue.push_back(item);
+        m_currentBytes += pktSize;
+        return true;
+    }
+
+    bool pop(AVPktItem &item) {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        if (m_queue.empty())
+            return false;
+
+        item = m_queue.front();
+        m_queue.pop_front();
+        size_t pktSize = item.pkt ? item.pkt->size : 0;
+        m_currentBytes -= pktSize;
+        return true;
+    }
+
+    // 查看第一个元素（不移除）
+    bool peekFirst(AVPktItem &item) {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        if (m_queue.empty())
+            return false;
+
+        item = m_queue.front();
+        return true;
+    }
+
+    size_t size() const {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        return m_queue.size();
+    }
+
+    size_t currentBytes() const {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        return m_currentBytes;
+    }
+
+    size_t maxBytes() const { return m_maxBytes; }
+
+    void clear() {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        while (!m_queue.empty()) {
+            AVPktItem item = m_queue.front();
+            m_queue.pop_front();
+            av_packet_free(&item.pkt);
+        }
+        m_currentBytes = 0;
+    }
+
+    int serial() const { return m_serial.load(std::memory_order_relaxed); }
+    void addSerial() { m_serial.fetch_add(1); }
+
+private:
+    mutable std::mutex m_mutex;
+    std::deque<AVPktItem> m_queue;
+    const size_t m_maxBytes; // 总字节上限
+    size_t m_currentBytes;   // 当前总字节数
+    std::atomic<int> m_serial{0};
+};
+
+#endif // UTILS_H

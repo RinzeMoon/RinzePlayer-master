@@ -1,0 +1,7 @@
+build/
+AZPlayer/
+test_opencv_build/
+docs/
+.claude/
+*.user
+*.tmp
