@@ -5,3 +5,8 @@ docs/
 .claude/
 *.user
 *.tmp
+*.dll
+*.exe
+*.obj
+*.a
+*.lib
