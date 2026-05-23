@@ -1,6 +1,7 @@
 # RinzePlayer
 
-> 本项目基于 [AZPlayer](https://github.com/az7792/AZPlayer) 二次开发，在原有播放器基础上新增异地双人同步观影、弹幕聊天、视频分析报告等功能。
+> **上游项目**：[AZPlayer](https://github.com/az7792/AZPlayer) — 基于 Qt/FFmpeg 的音视频播放器。
+> 本项目在其基础上新增异地双人同步观影、弹幕聊天、视频分析报告等功能。
 
 基于 C++/Qt6 + FFmpeg 8.0 的全功能音视频播放器，集成异地双人实时同步观影。
 
@@ -60,4 +61,4 @@ cd ../chatroom-server && npm install && node src/index.js
 
 ## 许可
 
-基于原项目 [AZPlayer](https://github.com/az7792/AZPlayer) 的 GPL-3.0 许可证。
+本项目继承上游 [AZPlayer](https://github.com/az7792/AZPlayer) 的许可证，基于 **GNU 通用公共许可证第 3 版（GPL-3.0）** 授权。
